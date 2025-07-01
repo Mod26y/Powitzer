@@ -5,7 +5,7 @@ A library of useful one off powershell scripts for doing things that Windows sho
 
 Convert-ISOtoExcelDates.ps1
 
-#### DISCLAIMER AND HOLD HARMLESS
+### DISCLAIMER AND HOLD HARMLESS
 
 This script is provided "AS IS", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement.
 
