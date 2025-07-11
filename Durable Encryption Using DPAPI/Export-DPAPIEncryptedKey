@@ -1,0 +1,49 @@
+param (
+    [Parameter(Mandatory)]
+    [ValidatePattern('^[a-zA-Z_][a-zA-Z0-9_]*$')]
+    [string]$PlainVarName,
+
+    [string]$OutFile = "$PlainVarName.ps1"
+)
+
+# Ensure DPAPI is available
+try {
+    Add-Type -AssemblyName System.Security
+} catch {
+    throw "Required .NET assembly 'System.Security' could not be loaded. DPAPI is unavailable."
+}
+
+# Securely prompt for API key
+$SecureApiKey = Read-Host "Enter API Key" -AsSecureString
+$BSTR = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureApiKey)
+$UnsecureApiKey = [Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+
+# Encrypt the API key using DPAPI
+$apiBytes = [System.Text.Encoding]::UTF8.GetBytes($UnsecureApiKey)
+$encrypted = [System.Security.Cryptography.ProtectedData]::Protect(
+    $apiBytes,
+    $null,
+    [System.Security.Cryptography.DataProtectionScope]::CurrentUser
+)
+$encryptedBase64 = [Convert]::ToBase64String($encrypted)
+
+# Generate the reusable decryption header with proper escaping
+$header = @"
+# DPAPI Encrypted API Key Header
+`$EncryptedApiKey = "$encryptedBase64"
+`$ApiKeyBytes = [Convert]::FromBase64String(`$EncryptedApiKey)
+`$${PlainVarName} = [System.Text.Encoding]::UTF8.GetString(
+    [System.Security.Cryptography.ProtectedData]::Unprotect(
+        `$ApiKeyBytes,
+        `$null,
+        [System.Security.Cryptography.DataProtectionScope]::CurrentUser
+    )
+)
+"@
+
+# Write the header to the specified file
+$header | Set-Content -Encoding UTF8 -Path $OutFile -Force
+
+# Clean up sensitive data from memory
+[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+Remove-Variable SecureApiKey, UnsecureApiKey, BSTR, apiBytes, encrypted, encryptedBase64, header
