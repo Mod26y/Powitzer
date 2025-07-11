@@ -3,10 +3,19 @@ param (
     [ValidatePattern('^[a-zA-Z_][a-zA-Z0-9_]*$')]
     [string]$PlainVarName,
 
-    [string]$OutPath = $PSScriptRoot,
+    [string]$OutPath,
 
     [string]$OutFile
 )
+
+# Resolve script directory or fallback to current directory
+$ResolvedOutPath = if ($OutPath) {
+    $OutPath
+} elseif ($PSScriptRoot) {
+    $PSScriptRoot
+} else {
+    Get-Location | Select-Object -ExpandProperty Path
+}
 
 # Ensure DPAPI is available
 try {
@@ -17,9 +26,9 @@ try {
 
 # Resolve output file name
 if (-not $OutFile) {
-    $OutFile = Join-Path -Path $OutPath -ChildPath "$PlainVarName.ps1"
+    $OutFile = Join-Path -Path $ResolvedOutPath -ChildPath "$PlainVarName.ps1"
 } elseif (-not [System.IO.Path]::IsPathRooted($OutFile)) {
-    $OutFile = Join-Path -Path $OutPath -ChildPath $OutFile
+    $OutFile = Join-Path -Path $ResolvedOutPath -ChildPath $OutFile
 }
 
 # Securely prompt for API key
