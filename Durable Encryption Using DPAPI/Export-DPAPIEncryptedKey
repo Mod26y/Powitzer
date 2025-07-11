@@ -3,7 +3,9 @@ param (
     [ValidatePattern('^[a-zA-Z_][a-zA-Z0-9_]*$')]
     [string]$PlainVarName,
 
-    [string]$OutFile = "$PlainVarName.ps1"
+    [string]$OutPath = $PSScriptRoot,
+
+    [string]$OutFile
 )
 
 # Ensure DPAPI is available
@@ -11,6 +13,13 @@ try {
     Add-Type -AssemblyName System.Security
 } catch {
     throw "Required .NET assembly 'System.Security' could not be loaded. DPAPI is unavailable."
+}
+
+# Resolve output file name
+if (-not $OutFile) {
+    $OutFile = Join-Path -Path $OutPath -ChildPath "$PlainVarName.ps1"
+} elseif (-not [System.IO.Path]::IsPathRooted($OutFile)) {
+    $OutFile = Join-Path -Path $OutPath -ChildPath $OutFile
 }
 
 # Securely prompt for API key
