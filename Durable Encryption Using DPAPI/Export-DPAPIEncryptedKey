@@ -17,26 +17,26 @@ $ResolvedOutPath = if ($OutPath) {
     Get-Location | Select-Object -ExpandProperty Path
 }
 
-# Ensure DPAPI is available
+# Ensure DPAPI is available at encryption time
 try {
     Add-Type -AssemblyName System.Security
 } catch {
     throw "Required .NET assembly 'System.Security' could not be loaded. DPAPI is unavailable."
 }
 
-# Resolve output file name
+# Resolve output path
 if (-not $OutFile) {
     $OutFile = Join-Path -Path $ResolvedOutPath -ChildPath "$PlainVarName.ps1"
 } elseif (-not [System.IO.Path]::IsPathRooted($OutFile)) {
     $OutFile = Join-Path -Path $ResolvedOutPath -ChildPath $OutFile
 }
 
-# Securely prompt for API key
+# Prompt for the API key securely
 $SecureApiKey = Read-Host "Enter API Key" -AsSecureString
 $BSTR = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureApiKey)
 $UnsecureApiKey = [Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
 
-# Encrypt the API key using DPAPI
+# Encrypt using DPAPI
 $apiBytes = [System.Text.Encoding]::UTF8.GetBytes($UnsecureApiKey)
 $encrypted = [System.Security.Cryptography.ProtectedData]::Protect(
     $apiBytes,
@@ -45,9 +45,16 @@ $encrypted = [System.Security.Cryptography.ProtectedData]::Protect(
 )
 $encryptedBase64 = [Convert]::ToBase64String($encrypted)
 
-# Generate the reusable decryption header with proper escaping
+# Create the decryption header with try/catch for Add-Type
 $header = @"
 # DPAPI Encrypted API Key Header
+
+try {
+    Add-Type -AssemblyName System.Security
+} catch {
+    throw "Required .NET assembly 'System.Security' could not be loaded. DPAPI is unavailable."
+}
+
 `$EncryptedApiKey = "$encryptedBase64"
 `$ApiKeyBytes = [Convert]::FromBase64String(`$EncryptedApiKey)
 `$${PlainVarName} = [System.Text.Encoding]::UTF8.GetString(
@@ -59,9 +66,9 @@ $header = @"
 )
 "@
 
-# Write the header to the specified file
+# Write to file
 $header | Set-Content -Encoding UTF8 -Path $OutFile -Force
 
-# Clean up sensitive data from memory
+# Clean up
 [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
 Remove-Variable SecureApiKey, UnsecureApiKey, BSTR, apiBytes, encrypted, encryptedBase64, header
