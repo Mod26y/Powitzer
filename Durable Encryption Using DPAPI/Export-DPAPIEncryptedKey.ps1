@@ -5,7 +5,10 @@ param (
 
     [string]$OutPath,
 
-    [string]$OutFile
+    [string]$OutFile,
+
+    [ValidateSet('CurrentUser', 'LocalMachine')]
+    [string]$Scope = 'CurrentUser'
 )
 
 # Resolve script directory or fallback to current directory
@@ -17,58 +20,52 @@ $ResolvedOutPath = if ($OutPath) {
     Get-Location | Select-Object -ExpandProperty Path
 }
 
-# Ensure DPAPI is available at encryption time
+# Ensure DPAPI is available
 try {
     Add-Type -AssemblyName System.Security
 } catch {
     throw "Required .NET assembly 'System.Security' could not be loaded. DPAPI is unavailable."
 }
 
-# Resolve output path
+# Determine output file path
 if (-not $OutFile) {
     $OutFile = Join-Path -Path $ResolvedOutPath -ChildPath "$PlainVarName.ps1"
 } elseif (-not [System.IO.Path]::IsPathRooted($OutFile)) {
     $OutFile = Join-Path -Path $ResolvedOutPath -ChildPath $OutFile
 }
 
-# Prompt for the API key securely
+# Securely prompt for API key
 $SecureApiKey = Read-Host "Enter API Key" -AsSecureString
 $BSTR = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureApiKey)
 $UnsecureApiKey = [Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
 
-# Encrypt using DPAPI
+# Encrypt the API key using selected DPAPI scope
 $apiBytes = [System.Text.Encoding]::UTF8.GetBytes($UnsecureApiKey)
+$dpapiScope = [System.Security.Cryptography.DataProtectionScope]::$Scope
 $encrypted = [System.Security.Cryptography.ProtectedData]::Protect(
     $apiBytes,
     $null,
-    [System.Security.Cryptography.DataProtectionScope]::CurrentUser
+    $dpapiScope
 )
 $encryptedBase64 = [Convert]::ToBase64String($encrypted)
 
-# Create the decryption header with try/catch for Add-Type
+# Generate reusable decryption script with proper escaping
 $header = @"
 # DPAPI Encrypted API Key Header
-
-try {
-    Add-Type -AssemblyName System.Security
-} catch {
-    throw "Required .NET assembly 'System.Security' could not be loaded. DPAPI is unavailable."
-}
-
 `$EncryptedApiKey = "$encryptedBase64"
 `$ApiKeyBytes = [Convert]::FromBase64String(`$EncryptedApiKey)
 `$${PlainVarName} = [System.Text.Encoding]::UTF8.GetString(
     [System.Security.Cryptography.ProtectedData]::Unprotect(
         `$ApiKeyBytes,
         `$null,
-        [System.Security.Cryptography.DataProtectionScope]::CurrentUser
+        [System.Security.Cryptography.DataProtectionScope]::$Scope
     )
 )
 "@
 
-# Write to file
+# Write header to file
 $header | Set-Content -Encoding UTF8 -Path $OutFile -Force
 
-# Clean up
+# Clean up sensitive variables
 [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
 Remove-Variable SecureApiKey, UnsecureApiKey, BSTR, apiBytes, encrypted, encryptedBase64, header
