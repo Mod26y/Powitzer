@@ -52,6 +52,13 @@ $encryptedBase64 = [Convert]::ToBase64String($encrypted)
 # Generate reusable decryption script with proper escaping
 $header = @"
 # DPAPI Encrypted API Key Header
+
+try {
+    Add-Type -AssemblyName System.Security
+} catch {
+    throw "Required .NET assembly 'System.Security' could not be loaded. DPAPI is unavailable."
+}
+
 `$EncryptedApiKey = "$encryptedBase64"
 `$ApiKeyBytes = [Convert]::FromBase64String(`$EncryptedApiKey)
 `$${PlainVarName} = [System.Text.Encoding]::UTF8.GetString(
