@@ -76,6 +76,10 @@ To decrypt the key on multiple machines:
 
 If the key is correctly decrypted, roaming is functional.
 
+## Using LocalMachine Scope
+When using the LocalMachine DPAPI scope, encrypted secrets are bound to the operating system instance rather than a specific user profile. This allows any user or service on the same machine, given appropriate file permissions, to decrypt the secret. While this simplifies multi-user or automation scenarios and removes the need for credential roaming, it reduces isolation and increases the importance of securing the script output with NTFS permissions. Use LocalMachine scope only when user-specific encryption is impractical and the machine is otherwise trusted and access-controlled.
+
+
 ## License
 
 MIT License
